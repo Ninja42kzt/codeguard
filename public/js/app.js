@@ -520,6 +520,32 @@ function hideError() {
 }
 
 /**
+ * Close error modal without resetting (just dismiss)
+ */
+function closeErrorModal() {
+  document.getElementById('error-message').style.display = 'none';
+  hideLoadingOverlay();
+  // Re-enable submit buttons so the form is usable again
+  document.querySelectorAll('button[type="submit"]').forEach(btn => {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+  });
+}
+
+/**
+ * Try Again - close modal and re-enable form for a new attempt
+ */
+function resetAfterError() {
+  closeErrorModal();
+  // Scroll back to the form
+  const analysisSection = document.querySelector('.analysis-section');
+  if (analysisSection) {
+    analysisSection.style.display = 'block';
+    analysisSection.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+/**
  * Escape HTML to prevent XSS
  */
 function escapeHtml(text) {

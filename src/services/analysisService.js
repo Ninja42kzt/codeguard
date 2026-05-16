@@ -25,13 +25,16 @@ async function analyzeRepository(repoPath, options = {}) {
 
   try {
     // Validate repository path
+    logger.debug(`Validating path: ${repoPath}`);
     await validatePath(repoPath);
 
     // Scan repository for files
+    logger.debug(`Scanning directory for files...`);
     const files = await scanDirectory(repoPath, options.filePattern);
     logger.info(`Found ${files.length} files to analyze`);
 
     if (files.length === 0) {
+      logger.warn('No files found to analyze');
       return {
         success: false,
         error: 'No files found to analyze',
@@ -41,13 +44,26 @@ async function analyzeRepository(repoPath, options = {}) {
     }
 
     // Read file contents
+    logger.debug(`Reading file contents...`);
     const filesWithContent = await readFiles(files, repoPath);
     logger.info(`Successfully read ${filesWithContent.length} files`);
 
+    if (filesWithContent.length === 0) {
+      logger.warn('No files could be read');
+      return {
+        success: false,
+        error: 'No files could be read',
+        repository: repoPath,
+        timestamp: new Date().toISOString()
+      };
+    }
+
     // Run all analyzers
+    logger.debug(`Running security analyzers...`);
     const results = await runAnalyzers(filesWithContent, options);
 
     // Calculate metrics
+    logger.debug(`Calculating metrics...`);
     const metrics = calculateMetrics(results, filesWithContent.length);
 
     // Calculate duration
@@ -73,6 +89,7 @@ async function analyzeRepository(repoPath, options = {}) {
 
   } catch (error) {
     logger.error(`Analysis failed: ${error.message}`);
+    logger.error(error.stack);
     throw error;
   }
 }
@@ -88,30 +105,44 @@ async function validatePath(repoPath) {
       throw new Error('Path is not a directory');
     }
   } catch (error) {
+    console.error('=== VALIDATE PATH ERROR ===');
+    console.error('Path:', repoPath);
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('===========================');
     throw new Error(`Invalid repository path: ${error.message}`);
   }
 }
 
 /**
  * Read contents of all files
- * @param {Array} files - Array of file paths
+ * @param {Array} files - Array of absolute file paths from scanDirectory
  * @param {string} basePath - Base repository path
  * @returns {Promise<Array>} Files with content
  */
 async function readFiles(files, basePath) {
   const filesWithContent = [];
 
-  for (const file of files) {
+  for (const filePath of files) {
     try {
-      const fullPath = path.join(basePath, file);
-      const content = await fs.readFile(fullPath, 'utf-8');
+      // scanDirectory returns absolute paths, so use them directly
+      const content = await fs.readFile(filePath, 'utf-8');
+      // Get relative path for display purposes
+      const relativePath = path.relative(basePath, filePath);
+      
       filesWithContent.push({
-        path: file,
-        fullPath,
+        path: relativePath,
+        fullPath: filePath,
         content
       });
     } catch (error) {
-      logger.warn(`Failed to read file ${file}: ${error.message}`);
+      console.error('=== READ FILE ERROR ===');
+      console.error('File:', filePath);
+      console.error('Base path:', basePath);
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('=======================');
+      logger.warn(`Failed to read file ${filePath}: ${error.message}`);
     }
   }
 
@@ -147,58 +178,114 @@ async function runAnalyzers(files, options = {}) {
 
   // Run secrets analyzer
   if (enabledAnalyzers.includes('secrets')) {
-    logger.debug('Running secrets analyzer...');
-    const secretsResults = secretsAnalyzer.analyzeMultipleFiles(files);
-    results.byCategory.secrets = secretsResults;
-    results.allVulnerabilities.push(...secretsResults.vulnerabilities);
+    try {
+      logger.debug('Running secrets analyzer...');
+      const secretsResults = secretsAnalyzer.analyzeMultipleFiles(files);
+      results.byCategory.secrets = secretsResults;
+      results.allVulnerabilities.push(...secretsResults.vulnerabilities);
+    } catch (error) {
+      console.error('=== SECRETS ANALYZER ERROR ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('==============================');
+      throw error;
+    }
   }
 
   // Run authentication analyzer
   if (enabledAnalyzers.includes('auth')) {
-    logger.debug('Running authentication analyzer...');
-    const authResults = authAnalyzer.analyzeMultipleFiles(files);
-    results.byCategory.authentication = authResults;
-    results.allVulnerabilities.push(...authResults.vulnerabilities);
+    try {
+      logger.debug('Running authentication analyzer...');
+      const authResults = authAnalyzer.analyzeMultipleFiles(files);
+      results.byCategory.authentication = authResults;
+      results.allVulnerabilities.push(...authResults.vulnerabilities);
+    } catch (error) {
+      console.error('=== AUTH ANALYZER ERROR ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('===========================');
+      throw error;
+    }
   }
 
   // Run SQL injection analyzer
   if (enabledAnalyzers.includes('sql')) {
-    logger.debug('Running SQL injection analyzer...');
-    const sqlResults = sqlAnalyzer.analyzeMultipleFiles(files);
-    results.byCategory.sql_injection = sqlResults;
-    results.allVulnerabilities.push(...sqlResults.vulnerabilities);
+    try {
+      logger.debug('Running SQL injection analyzer...');
+      const sqlResults = sqlAnalyzer.analyzeMultipleFiles(files);
+      results.byCategory.sql_injection = sqlResults;
+      results.allVulnerabilities.push(...sqlResults.vulnerabilities);
+    } catch (error) {
+      console.error('=== SQL ANALYZER ERROR ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('==========================');
+      throw error;
+    }
   }
 
   // Run route analyzer
   if (enabledAnalyzers.includes('routes')) {
-    logger.debug('Running route analyzer...');
-    const routeResults = routeAnalyzer.analyzeMultipleFiles(files);
-    results.byCategory.exposed_routes = routeResults;
-    results.allVulnerabilities.push(...routeResults.vulnerabilities);
+    try {
+      logger.debug('Running route analyzer...');
+      const routeResults = routeAnalyzer.analyzeMultipleFiles(files);
+      results.byCategory.exposed_routes = routeResults;
+      results.allVulnerabilities.push(...routeResults.vulnerabilities);
+    } catch (error) {
+      console.error('=== ROUTE ANALYZER ERROR ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('============================');
+      throw error;
+    }
   }
 
   // Run validation analyzer
   if (enabledAnalyzers.includes('validation')) {
-    logger.debug('Running validation analyzer...');
-    const validationResults = validationAnalyzer.analyzeMultipleFiles(files);
-    results.byCategory.validation = validationResults;
-    results.allVulnerabilities.push(...validationResults.vulnerabilities);
+    try {
+      logger.debug('Running validation analyzer...');
+      const validationResults = validationAnalyzer.analyzeMultipleFiles(files);
+      results.byCategory.validation = validationResults;
+      results.allVulnerabilities.push(...validationResults.vulnerabilities);
+    } catch (error) {
+      console.error('=== VALIDATION ANALYZER ERROR ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('==================================');
+      throw error;
+    }
   }
 
   // Group by severity
-  results.allVulnerabilities.forEach(vuln => {
-    if (results.bySeverity[vuln.severity]) {
-      results.bySeverity[vuln.severity].push(vuln);
-    }
-  });
+  try {
+    results.allVulnerabilities.forEach(vuln => {
+      if (results.bySeverity[vuln.severity]) {
+        results.bySeverity[vuln.severity].push(vuln);
+      }
+    });
+  } catch (error) {
+    console.error('=== GROUP BY SEVERITY ERROR ===');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('===============================');
+    throw error;
+  }
 
   // Group by file
-  results.allVulnerabilities.forEach(vuln => {
-    if (!results.byFile[vuln.file]) {
-      results.byFile[vuln.file] = [];
-    }
-    results.byFile[vuln.file].push(vuln);
-  });
+  try {
+    results.allVulnerabilities.forEach(vuln => {
+      if (!results.byFile[vuln.file]) {
+        results.byFile[vuln.file] = [];
+      }
+      results.byFile[vuln.file].push(vuln);
+    });
+  } catch (error) {
+    console.error('=== GROUP BY FILE ERROR ===');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('===========================');
+    throw error;
+  }
 
   return results;
 }
@@ -367,6 +454,12 @@ async function analyzeFiles(filePaths, basePath, options = {}) {
         content
       });
     } catch (error) {
+      console.error('=== ANALYZE FILES READ ERROR ===');
+      console.error('File path:', filePath);
+      console.error('Base path:', basePath);
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('================================');
       logger.warn(`Failed to read file ${filePath}: ${error.message}`);
     }
   }

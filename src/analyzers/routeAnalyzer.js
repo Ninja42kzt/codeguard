@@ -318,17 +318,34 @@ function getRecommendation(issueType) {
 function analyzeMultipleFiles(files) {
   const allVulnerabilities = [];
   
-  files.forEach(file => {
-    const vulnerabilities = analyzeRoutes(file.content, file.path);
-    allVulnerabilities.push(...vulnerabilities);
-  });
+  try {
+    files.forEach(file => {
+      try {
+        const vulnerabilities = analyzeRoutes(file.content, file.path);
+        allVulnerabilities.push(...vulnerabilities);
+      } catch (error) {
+        console.error('=== ROUTE ANALYZER FILE ERROR ===');
+        console.error('File:', file.path);
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        console.error('=================================');
+        throw error;
+      }
+    });
 
-  return {
-    total: allVulnerabilities.length,
-    vulnerabilities: allVulnerabilities,
-    bySeverity: groupBySeverity(allVulnerabilities),
-    byType: groupByType(allVulnerabilities)
-  };
+    return {
+      total: allVulnerabilities.length,
+      vulnerabilities: allVulnerabilities,
+      bySeverity: groupBySeverity(allVulnerabilities),
+      byType: groupByType(allVulnerabilities)
+    };
+  } catch (error) {
+    console.error('=== ROUTE ANALYZER MULTIPLE FILES ERROR ===');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('===========================================');
+    throw error;
+  }
 }
 
 /**

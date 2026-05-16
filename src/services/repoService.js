@@ -33,7 +33,7 @@ function extractRepoName(repoUrl) {
  * @param {string} repoUrl - Repository URL
  * @returns {Promise<Object>} Clone result with path and metadata
  */
-async function cloneRepository(repoUrl) {
+async function cloneRepository(repoUrl, branch = 'main') {
   // Validate URL
   if (!isValidGitHubUrl(repoUrl)) {
     throw new Error('Invalid GitHub repository URL');
@@ -52,25 +52,38 @@ async function cloneRepository(repoUrl) {
   try {
     const git = simpleGit();
 
-    // Configure git options
-    const cloneOptions = {
-      '--depth': 1, // Shallow clone for faster download
-      '--single-branch': null
-    };
-
     // Add authentication if GitHub token is provided
     let authUrl = repoUrl;
     if (config.githubToken) {
       authUrl = repoUrl.replace('https://', `https://${config.githubToken}@`);
     }
 
-    // Clone with timeout
-    const clonePromise = git.clone(authUrl, clonePath, cloneOptions);
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Clone operation timed out')), config.cloneTimeoutMs);
-    });
+    // Configure git options - try with specified branch, fall back to default
+    const cloneWithBranch = async (targetBranch) => {
+      const opts = { '--depth': 1, '--single-branch': null };
+      if (targetBranch) opts['--branch'] = targetBranch;
+      return git.clone(authUrl, clonePath, opts);
+    };
 
-    await Promise.race([clonePromise, timeoutPromise]);
+    // Clone with timeout, with branch fallback
+    const timeoutMs = config.cloneTimeoutMs;
+    const withTimeout = (promise) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Clone operation timed out')), timeoutMs))
+    ]);
+
+    try {
+      await withTimeout(cloneWithBranch(branch));
+    } catch (branchError) {
+      // If branch not found, retry without specifying branch (use repo default)
+      if (branchError.message && (branchError.message.includes('Remote branch') || branchError.message.includes('not found') || branchError.message.includes('fatal'))) {
+        logger.warn(`Branch '${branch}' not found, cloning default branch`);
+        if (await fs.pathExists(clonePath)) await fs.remove(clonePath);
+        await withTimeout(cloneWithBranch(null));
+      } else {
+        throw branchError;
+      }
+    }
 
     // Check repository size
     const repoSize = await getDirectorySize(clonePath);

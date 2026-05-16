@@ -182,6 +182,7 @@
       <!-- Error Message -->
       <div class="error-message" id="error-message" style="display: none;">
         <div class="error-content">
+          <button class="error-close-btn" onclick="closeErrorModal()" title="Close">&times;</button>
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -189,7 +190,10 @@
           </svg>
           <h3>Analysis Failed</h3>
           <p id="error-text"></p>
-          <button class="btn btn-primary" onclick="hideError()">Try Again</button>
+          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn btn-primary" onclick="resetAfterError()">Try Again</button>
+            <button class="btn btn-secondary" onclick="closeErrorModal()">Close</button>
+          </div>
         </div>
       </div>
     </div>
